@@ -1,0 +1,8 @@
+pandas
+tabpfn
+optuna
+ucimlrepo
+transformers
+scikit-learn
+xgboost
+torch
