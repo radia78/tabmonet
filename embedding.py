@@ -18,7 +18,11 @@ class CategoricalEmbedding(nn.Module):
         )  # Purely heuristic, I have no idea what initialization scheme works for embeddings -> Need to learn more
 
     def forward(self, x):
-        feature_idx = torch.arange(self.num_features, dtype=torch.long, device=x.device)
+        feature_idx = torch.arange(
+            self.num_features, 
+            dtype=torch.long, 
+            device=x.device
+        )
         emb = self.embedding[feature_idx, x, :]
 
         return emb

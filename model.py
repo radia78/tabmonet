@@ -68,29 +68,34 @@ class TabularMONet(nn.Module):
             num_features, 
             embed_dim,
             expansion_factor,
-            num_embedding,
+            numerical_encoder,
+            categorical_encoder,
             num_layers,
             task='reg',
             num_classes=10,
         ):
         super().__init__()
         modules = []
+        divider = 2
+        emb_dim = embed_dim
         for i in range(num_layers):
+            emb_dim = emb_dim // divider ** i
             in_features = num_features if i == 0 else embed_dim
             modules.append(
                 nn.Sequential(
-                    PolyMlp(in_features, embed_dim, embed_dim),
-                    PolyMlp(embed_dim, (embed_dim) * expansion_factor, embed_dim)
+                    PolyMlp(in_features, emb_dim, emb_dim),
+                    PolyMlp(emb_dim, emb_dim * expansion_factor, emb_dim)
                 )
             )
         
-        self.num_embedding = num_embedding
+        self.numerical_encoder = numerical_encoder
+        self.categorical_encoder = categorical_encoder
 
         self.poly_blocks = nn.Sequential(*modules)
         if task == 'reg':
-            self.head = nn.Linear(embed_dim, out_features=1)
+            self.head = nn.Linear(emb_dim, out_features=1)
         else:
-            self.head = nn.Linear(embed_dim, out_features=num_classes)
+            self.head = nn.Linear(emb_dim, out_features=num_classes)
 
         self.init_head_weights_()
 
@@ -99,16 +104,16 @@ class TabularMONet(nn.Module):
         nn.init.ones_(self.head.bias)
     
     def forward(self, x_num, x_cat):
-        if x_cat is not None and x_num is None:
-            e = x_cat
+        if x_num is None and x_cat is not None:
+            e = self.categorical_encoder(x_cat).flatten(start_dim=1)
 
-        if x_num is not None and x_cat is None:
-            e = self.num_embedding(x_num).flatten(start_dim=1)
+        elif x_num is not None and x_cat is None:
+            e = self.numerical_encoder(x_num).flatten(start_dim=1)
 
         else:
             e = torch.cat([
-                self.num_embedding(x_num).flatten(start_dim=1),
-                x_cat,
+                self.numerical_encoder(x_num).flatten(start_dim=1),
+                self.categorical_encoder(x_cat).flatten(start_dim=1),
             ], dim=-1)
 
         h = self.poly_blocks(e)

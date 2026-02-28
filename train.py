@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 
+from torch.utils.data import DataLoader
+
 import yaml
 from sklearn.metrics import roc_auc_score, root_mean_squared_error
 from torch.utils.tensorboard import SummaryWriter
@@ -49,7 +51,6 @@ _scheduler_mapping = {
     "NA": None,
 }
 
-
 class Trainer:
     def __init__(
         self,
@@ -80,11 +81,15 @@ class Trainer:
         self.model.train()
         running_loss = 0.0
 
-        # TODO: Make this adaptable to cases where there is missing categorical/numerical features
         for num_features, cat_features, targets in train_loader:
 
-            # Attaching data to device
-            num_features, cat_features = num_features.to(self.device), cat_features.to(self.device)
+            # Attach to device based on if it is not empty
+            if cat_features is not None:
+                cat_features = cat_features.to(self.device)
+            
+            if num_features is not None:
+                num_features = num_features.to(self.device)
+
             targets = targets.to(self.device)
 
             # There might be cases where we use multiple optimizers 
@@ -123,47 +128,58 @@ class Trainer:
 
     def validate(self, val_loader, epoch):
         self.model.eval()
-        running_loss = 0.0
+
+        output_cache = []
+        target_cache = []
 
         with torch.no_grad():
             for num_features, cat_features, targets in val_loader:
-
-                num_features, cat_features = num_features.to(self.device), cat_features.to(self.device)
-                targets = self.preprocessor.inverse_transform_target(targets.numpy())
+                # Attach to device based on if it is not empty
+                if cat_features is not None:
+                    cat_features = cat_features.to(self.device)
+                
+                if num_features is not None:
+                    num_features = num_features.to(self.device)
 
                 if self.task == "reg":
+                    # If we are performing regression, we have to inverse transform for a fair assesment
+                    targets = self.preprocessor.inverse_transform_target(targets.numpy())
                     outputs = self.preprocessor.target_preprocessor.inverse_transform(
                         self.model(
                             num_features,
                             cat_features
                         ).cpu().numpy()
                     )
-                    running_loss += root_mean_squared_error(targets, outputs)
 
                 else:
-                    outputs = self.preprocessor.target_preprocessor.inverse_transform(
-                        self.model(
-                            num_features,
-                            cat_features
-                        ).sigmoid().cpu().numpy()
-                    )
-                    running_loss += roc_auc_score(targets, outputs)
+                    # Inverse transform is not necessary for prediction since things will be encoded as 0-1 (bin-cls)
+                    outputs = self.model(num_features, cat_features).sigmoid().cpu().numpy()
+                
+                output_cache.append(outputs)
+                target_cache.append(targets)
 
-        avg_loss = running_loss / len(val_loader)
+        output_cache = np.concat(output_cache, axis=0)
+        target_cache = np.concat(target_cache, axis=0)
+
+        if self.task == "reg":
+            avg_loss = root_mean_squared_error(target_cache, output_cache)
+        
+        else:
+            avg_loss = roc_auc_score(target_cache, output_cache)
 
         # Log validation loss to TensorBoard
         self.writer.add_scalar("Loss/Validation", avg_loss, epoch)
         return avg_loss
 
     def fit(
-        self,
-        model_path,
-        model_name,
-        train_loader,
-        val_loader,
-        epochs=10,
-        save_model=False,
-    ):
+            self,
+            model_path,
+            model_name,
+            train_loader,
+            val_loader,
+            epochs=10,
+            save_model=False,
+        ):
         prog_bar = tqdm(range(epochs))
         for epoch in prog_bar:
             train_loss = self.train_epoch(train_loader, epoch)
@@ -187,11 +203,13 @@ class Trainer:
 
 
 def main(config):
+    # Load configs in separate variables for isolation and cohesiveness
     model_config = config["model"]
     num_emb_config = config["embedding"]["numerical"]
+    cat_emb_config = config["embedding"]["categorical"]
     optim_config = config['optim']
     lr_config = config['lr']
-
+    
     emb_model_name = num_emb_config.pop("name").strip()
     assert emb_model_name in _embedding_models, (
         f"Embedding '{emb_model_name}' does not exist"
@@ -199,35 +217,53 @@ def main(config):
 
     if emb_model_name == "Q" or emb_model_name == "Q-NF" or emb_model_name == "QV2":
         num_bins = num_emb_config["num_bins"]
-        return_bin_edges = True
 
     else:
-        num_bins = 0
-        return_bin_edges = False
+        num_bins = None
 
-    train_loader, test_loader, preprocessor, bin_edges = load_dataset(
-        dataset_id=config["id"],
-        task=config["task"],
-        test_size=config["test_size"],
-        batch_size=config["batch_size"],
-        return_bin_edges=return_bin_edges,
-        num_bins=num_bins,
+    # Load the dataset
+    train_dataset, test_dataset, preprocessor = load_dataset(
+        dataset_id=config['id'],
+        task=config['task'],
+        max_class=cat_emb_config['max_class'],
+        test_size=config['test_size'],
+        num_bins=num_bins
     )
 
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=config['batch_size'],
+        shuffle=True
+    )
+
+    test_loader = DataLoader(
+        dataset=test_dataset,
+        batch_size=config['batch_size'],
+        shuffle=False
+    )
+
+    if config['categorical_variables']:
+        cat_embedding = CategoricalEmbedding(
+            num_features=preprocessor.num_categorical_features,
+            max_class=cat_emb_config['max_class'],
+            embedding_size=cat_emb_config['emb_size']
+        )
+    else:
+        cat_embedding = None
+
     if config['numerical_variables']:
-        # Get bin edges if we use quantile embedding        
-        if return_bin_edges:
+        if num_bins is not None:
             num_embedding = _embedding_model_mapping.get(emb_model_name)(
-                **num_emb_config, bin_edges=bin_edges
+                **num_emb_config, bin_edges=train_dataset.bin_edges
             )
 
         else:
             num_embedding = _embedding_model_mapping.get(emb_model_name)(**num_emb_config)
 
-
     model = TabularMONet(
         **model_config,
-        num_embedding=num_embedding,
+        numerical_encoder=num_embedding,
+        categorical_encoder=cat_embedding
     )
 
     # Configuring the optimizer
@@ -273,7 +309,7 @@ def main(config):
     # runs/[DATA_ID]/[MODEL_CONFIG]-[EMBEDDING_CONFIG]-[OPTIMIZER_CONFIG]-[SCHEDULER_CONFIG]
     model_config_name = "-".join(f"{k}={v}" for k, v in model_config.items())
     num_emb_config_name = "-".join(f"{k}={v}" for k, v in num_emb_config.items())
-    #cat_emb_config_name = "-".join(f"{k}={v}" for k, v in cat_emb_config.items())
+    cat_emb_config_name = "-".join(f"{k}={v}" for k, v in cat_emb_config.items())
     optim_config_name = "-".join(f"{k}={v}" for k, v in optim_config.items())
     lr_config_name = "-".join(f"{k}={v}" for k, v in lr_config.items())
 
@@ -282,7 +318,7 @@ def main(config):
         [
             model_config_name, 
             num_emb_config_name, 
-            #cat_emb_config_name,
+            cat_emb_config_name,
         ])
 
     trainer = Trainer(
