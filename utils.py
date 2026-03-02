@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import (
     QuantileTransformer, 
-    OrdinalEncoder, 
+    LabelEncoder,
     StandardScaler,
 )
 
@@ -68,7 +68,7 @@ class DataPreprocessor:
             self.target_preprocessor = StandardScaler()
 
         else:
-            self.target_preprocessor = OrdinalEncoder()
+            self.target_preprocessor = LabelEncoder()
 
         self.categorical_columns = []
         self.numerical_columns = []
@@ -107,6 +107,7 @@ class DataPreprocessor:
         y_processed = self.target_preprocessor.transform(y)
 
         return cat_features, num_features, y_processed
+    
     
     def inverse_transform_target(self, y):
         return self.target_preprocessor.inverse_transform(y)
