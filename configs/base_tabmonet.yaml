@@ -1,0 +1,44 @@
+dataset_id: 291
+problem_type: regression
+test_size: 0.2
+batch_size: 32
+num_epochs: 256
+compile: true
+save_model: false
+device: mps
+
+model:
+  num_estimator: 4
+  num_classes: 1
+  embed_dim: 64
+  expansion_factor: 3
+  num_blocks: 1
+
+numerical_embedding:
+  name: QV2
+  num_bins: 64
+  bias: true
+
+categorical_embedding:
+  emb_size: 64
+
+optimizer:
+  name: muon
+  muon_config:
+    adjust_lr_fn: original
+    lr: 0.001
+    weight_decay: 0.1
+
+  adam_config:
+    lr: 0.001
+    betas: [0.9, 0.95]
+    weight_decay: 0.01
+
+lr_schedule:
+  name: cos-log
+  k: 4
+  T_max: 256
+
+wd_schedule:
+  name: flat-cos
+  T_max: 256

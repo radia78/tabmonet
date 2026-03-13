@@ -13,30 +13,18 @@ class CategoricalEmbedding(nn.Module):
             "embedding",
             nn.Parameter(torch.empty(num_features, max_class, embedding_size)),
         )
-        nn.init.normal(
+        nn.init.normal_(
             self.embedding
         )  # Purely heuristic, I have no idea what initialization scheme works for embeddings -> Need to learn more
 
     def forward(self, x):
-        feature_idx = torch.arange(
-            self.num_features, 
-            dtype=torch.long, 
-            device=x.device
-        )
+        feature_idx = torch.arange(self.num_features, dtype=torch.long, device=x.device)
         emb = self.embedding[feature_idx, x, :]
 
         return emb
 
 
 class LinearEmbedding(nn.Module):
-    """
-    Linear embedding that is standard amongst tabular deep learning. 
-    It creates a [num_features, emb_dim] tensor and multiply each column by the values of the feature.
-    Args:
-        num_features: Number of features from the dataset
-        emb_dim: The size of latent embedding
-        bias: Add an offset to the tensor
-    """
     def __init__(self, num_features: int, emb_dim: int, bias: bool):
         super().__init__()
         self.bias = bias
@@ -101,7 +89,7 @@ class QuantileEmbedding(nn.Module):
         super().__init__()
         self.with_linear = with_linear
         self.eps = eps
-        self.register_buffer("bin_edges", bin_edges.T)
+        self.register_buffer("bin_edges", bin_edges)
         self.num_bins = num_bins
 
         if with_linear:
@@ -133,7 +121,7 @@ class QuantileEmbeddingV2(nn.Module):
         super().__init__()
         self.bias = bias
         self.eps = eps
-        self.register_buffer("bin_edges", bin_edges.T)
+        self.register_buffer("bin_edges", bin_edges)
         self.num_bins = num_bins
         num_features = self.bin_edges.shape[0]
 
