@@ -59,7 +59,6 @@ class Trainer:
             cont_features = X[0].to(self.device)
 
         targets = targets.to(self.device)
-        
 
         for opt in self.optimizer:
             opt.zero_grad()

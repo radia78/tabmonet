@@ -81,7 +81,7 @@ def main(run_name, config):
 
         optimizer = [
             torch.optim.Muon(muon_params, **optim_config["muon_config"]),
-            torch.optim.AdamW(adam_params, **optim_config["adam_config"])
+            torch.optim.AdamW(adam_params, **optim_config["adam_config"]),
         ]
 
     elif optim_name == "adamw":
