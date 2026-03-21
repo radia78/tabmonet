@@ -1,7 +1,10 @@
 from tqdm import tqdm
 import os
 import torch
-import seaborn as sns
+import numpy as np
+import scipy as sp
+import pickle
+
 import matplotlib.pyplot as plt
 
 from torch.optim.optimizer import Optimizer
@@ -9,8 +12,8 @@ from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from sklearn.metrics import root_mean_squared_error, roc_auc_score
-from typing import Optional, List, Union
+from sklearn.metrics import root_mean_squared_error, roc_auc_score, log_loss
+from typing import Optional, List
 
 from utils.data import DataPreprocessor
 from utils.optimizer import WDScheduler
@@ -76,15 +79,14 @@ class Trainer:
         train_metrics = self.prepare_metrics_inputs(
             targets=targets.detach(), outputs=outputs.detach()
         )
-        self.train_running_metric += self.log_metrics(
-            train_metrics[0], train_metrics[1]
-        )
+        self.train_running_results["labels"].append(train_metrics[0])
+        self.train_running_results["preds"].append(train_metrics[1])
 
     def train_epoch(self, data: DataLoader):
         self.model.train()
 
         self.train_running_loss = 0.0
-        self.train_running_metric = 0.0
+        self.train_running_results = {"labels": [], "preds": []}
 
         for X, y in data:
             self.train_step(X=X, y=y)
@@ -98,7 +100,11 @@ class Trainer:
                 wd.step()
 
         avg_loss = self.train_running_loss / len(data)
-        avg_metric = self.train_running_metric / len(data)
+        # Stack and compute the metric
+        avg_metric = self.log_metrics(
+            targets=np.concatenate(self.train_running_results["labels"], axis=0),
+            outputs=sp.special.softmax(np.concatenate(self.train_running_results["preds"], axis=0), axis=-1),
+        )
 
         # Log training loss to TensorBoard
         return avg_loss, avg_metric
@@ -117,26 +123,38 @@ class Trainer:
         outputs = self.model(cont_features, cat_features)
         loss = self.criterion(outputs, targets)
 
+        self.val_running_loss += loss.item()
+
         # Add the targets and outputs for metric logging
         val_metrics = self.prepare_metrics_inputs(
             targets=targets.detach(), outputs=outputs.detach()
         )
-        self.val_running_metric += self.log_metrics(val_metrics[0], val_metrics[1])
+        self.val_running_results["labels"].append(val_metrics[0])
+        self.val_running_results["preds"].append(val_metrics[1])
 
-        self.val_running_loss += loss.item()
-
-    def val_epoch(self, data: DataLoader):
+    def val_epoch(self, data: DataLoader, epoch: Optional[int]=None):
         self.model.eval()
 
         self.val_running_loss = 0.0
-        self.val_running_metric = 0.0
+        self.val_running_results = {"labels": [], "preds": []}
 
         with torch.no_grad():
             for X, y in data:
                 self.val_step(X=X, y=y)
 
         avg_loss = self.val_running_loss / len(data)
-        avg_metric = self.val_running_metric / len(data)
+        # Stack and compute the metric
+        outputs = np.concatenate(self.val_running_results["preds"], axis=0)
+        targets = np.concatenate(self.val_running_results["labels"], axis=0)
+
+        avg_metric = self.log_metrics(
+            targets=targets,
+            outputs=sp.special.softmax(outputs, axis=-1),
+        )
+
+        if epoch:
+            fig = self.plot_learned_separation(outputs=outputs, targets=targets)
+            self.writer.add_figure(f"Plot", fig, epoch)
 
         # Log training loss to TensorBoard
         return avg_loss, avg_metric
@@ -152,7 +170,11 @@ class Trainer:
         prog_bar = tqdm(range(num_epochs))
         for epoch in prog_bar:
             train_loss, train_metric = self.train_epoch(train_loader)
-            val_loss, val_metric = self.val_epoch(val_loader)
+            if (epoch + 1) % 4 == 0:
+                val_loss, val_metric = self.val_epoch(val_loader, epoch)
+
+            else:
+                val_loss, val_metric = self.val_epoch(val_loader)
 
             # Needs to be changed
             prog_bar.set_description(
@@ -172,7 +194,12 @@ class Trainer:
                 self.best_epoch = epoch + 1
 
             else:
-                if val_metric < self.best_val_score:
+                caching_best = (
+                    val_metric > self.best_val_score
+                    if self.problem_type == "binary"
+                    else val_metric < self.best_val_score
+                )
+                if caching_best:
                     self.best_model_weights = self.model.state_dict()
                     self.best_val_score = val_metric
                     self.best_epoch = epoch + 1
@@ -194,7 +221,6 @@ class Trainer:
             cleaned_targets = self.preprocessor.inverse_transform_target(
                 targets.cpu().numpy().reshape(-1, 1)
             )
-
             cleaned_outputs = self.preprocessor.inverse_transform_target(
                 outputs.cpu().numpy().reshape(-1, 1)
             )
@@ -205,26 +231,58 @@ class Trainer:
             # Inverse transform is not necessary for prediction since things will be encoded as 0-1 (bin-cls)
             cleaned_outputs = outputs.sigmoid().cpu().numpy()
 
-            return targets, cleaned_outputs
+            return targets.cpu().numpy(), cleaned_outputs
 
         else:
-            cleaned_outputs = outputs.softmax().cpu().numpy()
+            cleaned_outputs = outputs.cpu().numpy()
 
-            return targets, cleaned_outputs
+            return targets.cpu().numpy(), cleaned_outputs
+
+    def plot_learned_separation(self, outputs: torch.Tensor, targets: torch.Tensor):
+        # Create a 3D plot
+        fig = plt.figure(figsize=(8, 6))
+        ax = fig.add_subplot(111, projection='3d')
+
+        # Plot the 3D scatter
+        sc = ax.scatter(
+            outputs[:, 0], 
+            outputs[:, 1], 
+            outputs[:, 2], 
+            c=targets, 
+            cmap='viridis', 
+            s=50
+        )
+
+        # Set labels
+        ax.set_xlabel('Logits of Class 1')
+        ax.set_ylabel('Logits of Class 2')
+        ax.set_zlabel('Logits of Class 3')
+
+        # Set title
+        ax.set_title('Logits Plot of 3-Class Classification')
+        cbar = fig.colorbar(sc, ax=ax, shrink=0.5, aspect=5)
+        cbar.set_label('Class Label')
+
+        return fig
 
     def log_metrics(self, targets, outputs):
         if self.problem_type == "regression":
             avg_score = root_mean_squared_error(targets, outputs)
-
-        else:
+        elif self.problem_type == "binary":
             avg_score = roc_auc_score(targets, outputs)
+        else:
+            avg_score = log_loss(targets, outputs)
 
         return avg_score
 
     def save_model(self, model_path: str):
         os.makedirs(model_path, exist_ok=True)
 
+        # Load the object from the file
+        with open(f"{model_path}/preprocessor.pkl", "wb") as file:
+            pickle.dump(self.preprocessor, file)
+
         torch.save(
-            self.best_model_weights.state_dict(),
+            self.best_model_weights,
             f"{model_path}/tabmonet.pt",
         )

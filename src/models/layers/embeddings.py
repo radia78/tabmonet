@@ -7,21 +7,21 @@ class CategoricalEmbedding(nn.Module):
     def __init__(self, num_features: int, max_class: int, embedding_size: int):
         super().__init__()
 
-        self.num_features = num_features
+        self.embedding = nn.Parameter(
+            torch.empty(num_features, max_class, embedding_size)
+        )
+
+        nn.init.xavier_uniform_(self.embedding.view(num_features, -1))
+        self.embedding.data = self.embedding.data.view(
+            num_features, max_class, embedding_size
+        )
 
         self.register_buffer(
-            "embedding",
-            nn.Parameter(torch.empty(num_features, max_class, embedding_size)),
+            "feature_idx", torch.arange(num_features, dtype=torch.long)
         )
-        nn.init.normal_(
-            self.embedding
-        )  # Purely heuristic, I have no idea what initialization scheme works for embeddings -> Need to learn more
 
-    def forward(self, x):
-        feature_idx = torch.arange(self.num_features, dtype=torch.long, device=x.device)
-        emb = self.embedding[feature_idx, x, :]
-
-        return emb
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.embedding[self.feature_idx, x]
 
 
 class LinearEmbedding(nn.Module):

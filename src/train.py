@@ -39,9 +39,11 @@ def main(run_name, config):
 
     # Load the dataset
     train_dataset, val_dataset, test_dataset, preprocessor, bin_edges = prepare_dataset(
+        rm_NA=True,
         dataset_id=config["dataset_id"],
         problem_type=config["problem_type"],
         num_bins=num_emb_config["num_bins"],
+        test_size=config["test_size"],
     )
 
     train_loader = DataLoader(
@@ -73,12 +75,11 @@ def main(run_name, config):
         muon_params = [
             p
             for name, p in model.named_parameters()
-            if ("weight" in name) and (p.dim() > 1)
+            if ("weight" in name) and (p.dim() == 2)
         ]
         adam_params = [
             p for name, p in model.named_parameters() if "weight" not in name
         ]
-
         optimizer = [
             torch.optim.Muon(muon_params, **optim_config["muon_config"]),
             torch.optim.AdamW(adam_params, **optim_config["adam_config"]),
