@@ -43,57 +43,16 @@ class LinearEmbedding(nn.Module):
         return out
 
 
-class QuantileEmbeddingNoFraction(nn.Module):
-    def __init__(
-        self,
-        num_bins: int,
-        bin_edges: torch.Tensor,
-        with_linear: bool,
-        linear_emb_dim: int,
-        bias: bool,
-        eps: float = 1e-5,
-    ):
-        super().__init__()
-        self.with_linear = with_linear
-        self.eps = eps
-        self.register_buffer("bin_edges", bin_edges.T)
-        self.num_bins = num_bins
-
-        if with_linear:
-            self.l = nn.Linear(self.num_bins, linear_emb_dim, bias=bias)
-
-    def forward(self, x):
-        batch_size, features = x.shape
-
-        edges_upper = self.bin_edges[:, 1:]
-
-        encoded = torch.zeros(batch_size, features, self.num_bins, device=x.device)
-        encoded = torch.where(x.unsqueeze(-1) > edges_upper, 1.0, encoded)
-
-        if self.with_linear:
-            encoded = self.l(encoded)
-
-        return encoded
-
-
 class QuantileEmbedding(nn.Module):
     def __init__(
-        self,
-        num_bins: int,
-        bin_edges: torch.Tensor,
-        with_linear: bool,
-        linear_emb_dim: int,
-        bias: bool,
-        eps: float = 1e-5,
+        self, num_bins: int, bin_edges: torch.Tensor, eps: float = 1e-5
     ):
         super().__init__()
-        self.with_linear = with_linear
         self.eps = eps
         self.register_buffer("bin_edges", bin_edges)
         self.num_bins = num_bins
 
-        if with_linear:
-            self.l = nn.Linear(self.num_bins, linear_emb_dim, bias=bias)
+        self.linear = nn.Linear(num_bins, 4)
 
     def forward(self, x):
         batch_size, features = x.shape
@@ -108,41 +67,8 @@ class QuantileEmbedding(nn.Module):
         mask = (x.unsqueeze(-1) >= edges_lower) & (x.unsqueeze(-1) <= edges_upper)
         encoded = torch.where(mask, frac, encoded)
 
-        if self.with_linear:
-            encoded = self.l(encoded)
-
-        return encoded
-
-
-class QuantileEmbeddingV2(nn.Module):
-    def __init__(
-        self, num_bins: int, bin_edges: torch.Tensor, bias: bool, eps: float = 1e-5
-    ):
-        super().__init__()
-        self.bias = bias
-        self.eps = eps
-        self.register_buffer("bin_edges", bin_edges)
-        self.num_bins = num_bins
-        num_features = self.bin_edges.shape[0]
-
-        if bias:
-            self.offset = nn.Parameter(torch.randn(num_features, num_bins))
-
-    def forward(self, x):
-        batch_size, features = x.shape
-
-        edges_upper = self.bin_edges[:, 1:]
-        edges_lower = self.bin_edges[:, :-1]
-
-        encoded = torch.zeros(batch_size, features, self.num_bins, device=x.device)
-        encoded = torch.where(x.unsqueeze(-1) > edges_upper, 1.0, encoded)
-
-        frac = (x.unsqueeze(-1) - edges_lower).div(edges_upper - edges_lower + self.eps)
-        mask = (x.unsqueeze(-1) >= edges_lower) & (x.unsqueeze(-1) <= edges_upper)
-        encoded = torch.where(mask, frac, encoded) * x.unsqueeze(-1)
-
-        if self.bias:
-            encoded = encoded + self.offset
+        # Shape: (batch_size, num_features, num_bins)
+        encoded = self.linear(encoded)
 
         return encoded
 
@@ -194,6 +120,7 @@ class PBLDEmbedding(nn.Module):
         nn.init.uniform_(self.b1, a=-np.pi, b=np.pi)
 
     def forward(self, x):
+        # Shape (batch size, num_cont_features)
         out1 = torch.einsum("ij, bi -> bij", self.w1, x)
         out2 = torch.cos(2 * torch.pi * out1 + self.b1)
         out3 = torch.cat((x.unsqueeze(-1), self.w2(out2)), dim=-1)

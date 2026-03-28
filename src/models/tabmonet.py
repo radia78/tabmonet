@@ -1,9 +1,10 @@
+from typing import List, Union
 import torch
 import torch.nn as nn
 from typing import Optional, Union
 
 from utils.data import DataPreprocessor
-from .layers.mlp import PolyMLP, MultiHeadPolyMlp
+from .layers.mlp import PolyMLP, FeatureFilter
 from .layers.embeddings import *
 
 from functools import partial
@@ -13,81 +14,74 @@ EMB_REGISTRY = {
     "P": PeriodicEmbedding,
     "L": LinearEmbedding,
     "Q": QuantileEmbedding,
-    "Q-NF": QuantileEmbeddingNoFraction,
     "NA": nn.Identity,
-    "QV2": QuantileEmbeddingV2,
 }
-
-LAYER_REGISTRY = {"poly": PolyMLP, "mpoly": MultiHeadPolyMlp}
 
 
 class PolyBlock(nn.Module):
     def __init__(
         self,
-        embed_dim: int,
+        in_features: Union[int, List[int]],
+        out_features: Union[int, List[int]],
+        embed_dim: Union[int, List[int]],
         expansion_factor: int = 3,
-        mlp_layer: Union[PolyMLP, MultiHeadPolyMlp] = PolyMLP,
+        mlp_layer=PolyMLP,
         norm_layer: nn.Module = partial(nn.LayerNorm, eps=1e-6),
+        spatial_mix: bool = False,
     ):
         super().__init__()
 
         self.embed_dim = embed_dim
         self.expansion_factor = expansion_factor
-        self.norm = norm_layer(self.embed_dim)
+        self.norm = norm_layer(embed_dim)
+
+        if isinstance(in_features, int):
+            in_features = 2 * [in_features]
+        if isinstance(embed_dim, int):
+            embed_dim = 2 * [embed_dim]
+        if isinstance(out_features, int):
+            out_features = 2 * [out_features]
+
         self.mlp1 = mlp_layer(
-            embed_dim, embed_dim, embed_dim, use_spatial=False, bias=False
+            in_features=in_features[0],
+            hidden_features=embed_dim[0],
+            out_features=out_features[0],
+            use_spatial=spatial_mix,
+            bias=False,
         )
         self.mlp2 = mlp_layer(
-            in_features=embed_dim,
-            hidden_features=embed_dim * expansion_factor,
-            out_features=embed_dim,
-            use_spatial=False,
+            in_features=in_features[1],
+            hidden_features=embed_dim[1] * expansion_factor,
+            out_features=out_features[1],
+            use_spatial=spatial_mix,
             bias=False,
         )
 
     def forward(self, x):
-        x_skip = x
-        z = self.norm(x)
-        z = self.mlp1(z)
-        x = x + z
+        x = self.mlp1(x)
         z = self.norm(x)
         z = self.mlp2(z)
         x = x + z
-        return x + x_skip
+        return x
 
 
-class PolyHead(nn.Module):
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        embed_dim: int,
-        expansion_factor: int = 3,
-        mlp_layer: Union[PolyMLP, MultiHeadPolyMlp] = PolyMLP,
-        norm_layer: nn.Module = partial(nn.LayerNorm, eps=1e-6),
-    ):
+class PolyAttn(nn.Module):
+    def __init__(self, in_features: int, hidden_features: int):
         super().__init__()
-
-        self.embed_dim = embed_dim
-        self.expansion_factor = expansion_factor
-        self.norm1 = norm_layer(in_features)
-        self.norm2 = norm_layer(embed_dim)
-        self.mlp1 = mlp_layer(in_features, embed_dim, embed_dim, use_spatial=False)
-        self.mlp2 = mlp_layer(
-            in_features=embed_dim,
-            hidden_features=embed_dim * expansion_factor,
-            out_features=out_features,
-            use_spatial=False,
-        )
+        self.hidden_features = hidden_features
+        self.w_qkv = nn.Linear(in_features, 3 * hidden_features, bias=False)
+        self.w_o = nn.Linear(hidden_features, in_features, bias=False)
+        self.alpha = nn.Parameter(torch.ones(1))
 
     def forward(self, x):
-        x = self.norm1(x)
-        x = self.mlp1(x)
+        # x shape: (batch_size, features, embed_dim)
+        q, k, v = torch.split(self.w_qkv(x), 3 * [self.hidden_features], dim=-1)
+        # Attention mechanism
+        a = (self.alpha * (q @ k.transpose(1, -1)) + 1) ** 4
+        a = a.div(torch.abs(a))
+        o = self.w_o(a @ v)
 
-        x = self.norm2(x)
-        x = self.mlp2(x)
-
-        return x
+        return o
 
 
 class MultiLinearAdapter(nn.Module):
@@ -95,13 +89,10 @@ class MultiLinearAdapter(nn.Module):
         super().__init__()
         self.adapters = nn.ModuleList(
             [
-                nn.Sequential(
-                    nn.Linear(in_features, embed_dim, bias=False)
-                )
+                nn.Sequential(nn.Linear(in_features, embed_dim, bias=False))
                 for _ in range(num_estimator)
             ]
         )
-        self.norm = nn.LayerNorm(embed_dim)
 
         self._init_weights()
 
@@ -114,9 +105,8 @@ class MultiLinearAdapter(nn.Module):
         o = torch.stack(
             [adapter(x.flatten(start_dim=1)) for adapter in self.adapters], dim=1
         )
-        # Shape of output: (batch_size, num_estimator, embed_dim)
 
-        return self.norm(o)
+        return o
 
 
 class PyramidAdapter(nn.Module):
@@ -126,12 +116,13 @@ class PyramidAdapter(nn.Module):
             in_channels=feature_dim, out_channels=embed_dim, kernel_size=3, bias=False
         )
         self.full_feature = nn.Linear(n_features, 1, bias=False)
+        self.padding = nn.CircularPad1d((0, 2))
 
     def forward(self, x):
         # Initial shape is (batch size, feature_dim, n_features)
         subset = self.feature_subset(
-            x
-        )  # Shape is (batch_size, feature_dim, n_ensembles)
+            self.padding(x)
+        )  # Shape is (batch_size, feature_dim, n_features)
         full = self.full_feature(x)  # Shape is (batch_size, feature_dim, 1)
         return torch.cat([subset, full], dim=-1)
 
@@ -139,9 +130,7 @@ class PyramidAdapter(nn.Module):
 class TabMONet(nn.Module):
     def __init__(
         self,
-        n_estimator: int,
         num_features: int,
-        feature_dim: int,
         n_classes: int,
         embed_dim: int,
         expansion_factor: int,
@@ -151,26 +140,25 @@ class TabMONet(nn.Module):
     ):
         super().__init__()
         modules = []
-        for _ in range(num_blocks):
+        for i in range(num_blocks):
+            if i == 0:
+                in_features =  [4, embed_dim]
+            else:
+                in_features = embed_dim
             modules.append(
                 PolyBlock(
-                    embed_dim,
-                    expansion_factor,
-                    mlp_layer=PolyMLP,
+                    in_features=in_features,
+                    expansion_factor=expansion_factor,
+                    embed_dim=embed_dim,
+                    out_features=embed_dim,
                 )
             )
 
+        self.soft_selection = nn.Parameter(torch.ones(num_features, 4))
         self.numerical_encoder = numerical_encoder
         self.categorical_encoder = categorical_encoder
-        self.adapter = MultiLinearAdapter(
-            n_estimator, num_features * feature_dim, embed_dim,
-        )
         self.poly_blocks = nn.Sequential(*modules)
-        self.head = PolyHead(
-            in_features=embed_dim,
-            out_features=n_classes,
-            embed_dim=embed_dim
-        )
+        self.head = PolyMLP(embed_dim * num_features, embed_dim, n_classes, bias=True)
 
     def forward(self, x_num, x_cat):
         if x_num is None and x_cat is not None:
@@ -187,12 +175,9 @@ class TabMONet(nn.Module):
                 ],
                 dim=1,
             )
-
-        # (batch_size, num_features, feature_dim) -> (batch_size, num_estimator, embed_dim)
-        # k = torch.stack([adapter(e.flatten(1, -1)) for adapter in self.adapters], dim=1)
-        k = self.adapter(e.flatten(1, -1))
-        h = self.poly_blocks(k)  # Shared Polynomial Weights
-        o = self.head(h.mean(dim=1))
+        e = self.soft_selection * e
+        e = self.poly_blocks(e)
+        o = self.head(e.flatten(1, -1))
 
         return o
 
@@ -225,17 +210,18 @@ def build_model(
             num_embedding = EMB_REGISTRY.get(emb_model_name)(
                 **num_emb_config, bin_edges=bin_edges
             )
+            feature_dim = num_emb_config["num_bins"]
 
         else:
-            num_embedding = EMB_REGISTRY.get(emb_model_name)(**num_emb_config)
+            num_embedding = EMB_REGISTRY.get(emb_model_name)(**num_emb_config, num_features=preprocessor.num_cont_features)
+            feature_dim = 4
 
     num_features = preprocessor.num_cat_features + preprocessor.num_cont_features
-    feature_dim = num_emb_config["num_bins"]
 
     model = TabMONet(
         **model_config,
         num_features=num_features,
-        feature_dim=feature_dim,
+        #feature_dim=feature_dim,
         categorical_encoder=cat_embedding,
         numerical_encoder=num_embedding,
     )

@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import scipy as sp
 import pickle
+import time
 
 import matplotlib.pyplot as plt
 
@@ -100,11 +101,16 @@ class Trainer:
                 wd.step()
 
         avg_loss = self.train_running_loss / len(data)
+        targets = np.concatenate(self.train_running_results["labels"], axis=0)
+        if self.problem_type == "multiclass":
+            outputs = sp.special.softmax(
+                np.concatenate(self.train_running_results["preds"], axis=0), axis=-1
+            )
+        else:
+            outputs = np.concatenate(self.train_running_results["preds"], axis=0)
+
         # Stack and compute the metric
-        avg_metric = self.log_metrics(
-            targets=np.concatenate(self.train_running_results["labels"], axis=0),
-            outputs=sp.special.softmax(np.concatenate(self.train_running_results["preds"], axis=0), axis=-1),
-        )
+        avg_metric = self.log_metrics(targets=targets, outputs=outputs)
 
         # Log training loss to TensorBoard
         return avg_loss, avg_metric
@@ -132,7 +138,7 @@ class Trainer:
         self.val_running_results["labels"].append(val_metrics[0])
         self.val_running_results["preds"].append(val_metrics[1])
 
-    def val_epoch(self, data: DataLoader, epoch: Optional[int]=None):
+    def val_epoch(self, data: DataLoader, epoch: Optional[int] = None):
         self.model.eval()
 
         self.val_running_loss = 0.0
@@ -144,15 +150,18 @@ class Trainer:
 
         avg_loss = self.val_running_loss / len(data)
         # Stack and compute the metric
-        outputs = np.concatenate(self.val_running_results["preds"], axis=0)
         targets = np.concatenate(self.val_running_results["labels"], axis=0)
+        if self.problem_type == "multiclass":
+            outputs = sp.special.softmax(
+                np.concatenate(self.val_running_results["preds"], axis=0), axis=-1
+            )
+        else:
+            outputs = np.concatenate(self.val_running_results["preds"], axis=0)
 
-        avg_metric = self.log_metrics(
-            targets=targets,
-            outputs=sp.special.softmax(outputs, axis=-1),
-        )
+        # Stack and compute the metric
+        avg_metric = self.log_metrics(targets=targets, outputs=outputs)
 
-        if epoch:
+        if epoch and self.problem_type == "multiclass":
             fig = self.plot_learned_separation(outputs=outputs, targets=targets)
             self.writer.add_figure(f"Plot", fig, epoch)
 
@@ -208,8 +217,11 @@ class Trainer:
         self.model.load_state_dict(self.best_model_weights, assign=True)
 
         # Benchmark the model at test data
+        t0 = time.time()
         _, test_metric = self.val_epoch(test_loader)
-        self.writer.add_hparams(self.run_config, {"Test Score": test_metric})
+        t1 = time.time()
+        inference_time = t1 - t0
+        self.writer.add_hparams(self.run_config, {"Test Score": test_metric, "Inference Time": inference_time})
 
         # Close the writer when finished
         self.writer.flush()
@@ -241,27 +253,23 @@ class Trainer:
     def plot_learned_separation(self, outputs: torch.Tensor, targets: torch.Tensor):
         # Create a 3D plot
         fig = plt.figure(figsize=(8, 6))
-        ax = fig.add_subplot(111, projection='3d')
+        ax = fig.add_subplot(111, projection="3d")
 
         # Plot the 3D scatter
         sc = ax.scatter(
-            outputs[:, 0], 
-            outputs[:, 1], 
-            outputs[:, 2], 
-            c=targets, 
-            cmap='viridis', 
-            s=50
+            outputs[:, 0], outputs[:, 1], outputs[:, 2], c=targets, cmap="viridis", s=50
         )
 
         # Set labels
-        ax.set_xlabel('Logits of Class 1')
-        ax.set_ylabel('Logits of Class 2')
-        ax.set_zlabel('Logits of Class 3')
+        ax.set_xlabel("Logits of Class 1")
+        ax.set_ylabel("Logits of Class 2")
+        ax.set_zlabel("Logits of Class 3")
 
         # Set title
-        ax.set_title('Logits Plot of 3-Class Classification')
+        ax.set_title("Logits Plot of 3-Class Classification")
+        ax.view_init(elev=30, azim=30)
         cbar = fig.colorbar(sc, ax=ax, shrink=0.5, aspect=5)
-        cbar.set_label('Class Label')
+        cbar.set_label("Class Label")
 
         return fig
 

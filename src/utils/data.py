@@ -10,6 +10,7 @@ from sklearn.preprocessing import (
     LabelEncoder,
     StandardScaler,
 )
+from sklearn.base import BaseEstimator, TransformerMixin
 from autogluon.features import LabelEncoderFeatureGenerator
 
 from typing import Optional
@@ -46,6 +47,35 @@ class TabularDataset(Dataset):
             return (self.cont_features[idx], self.cat_features[idx]), self.targets[idx]
 
 
+class RobustScaleSmoothClipTransform(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        X_array = X.to_numpy()
+        self._median = np.median(X_array, axis=-2)
+        quant_diff = np.quantile(X_array, 0.75, axis=-2) - np.quantile(X_array, 0.25, axis=-2)
+        max_val = np.max(X_array, axis=-2)
+        min_val = np.min(X_array, axis=-2)
+
+        idxs = quant_diff == 0.0
+        # On indexes where the quantile difference (IQR) is zero, fallback to a variation of min-max scaling
+        quant_diff[idxs] = 0.5 * (max_val[idxs] - min_val[idxs])
+
+        factors = 1.0 / (quant_diff + 1e-30)
+
+        # If the feature is entirely constant, set factor to zero
+        factors[quant_diff == 0.0] = 0.0
+
+        self._factors = factors
+        return self
+
+    def transform(self, X, y=None):
+        X_array = X.copy().to_numpy()
+        # 1. Robust Scaling
+        x_scaled = self._factors[None, :] * (X_array - self._median[None, :])
+
+        # 2. Smooth Clipping
+        return x_scaled / np.sqrt(1 + (x_scaled / 3) ** 2)
+
+
 class DataPreprocessor:
     def __init__(
         self,
@@ -55,7 +85,7 @@ class DataPreprocessor:
         cat_columns: Optional[list[str]] = None,
     ):
         # Per SOTA, we turn the numerical features via Quantile transformation
-        self.cont_encoder = QuantileTransformer(output_distribution="uniform")
+        self.cont_encoder = RobustScaleSmoothClipTransform()
         self.cat_encoder = LabelEncoderFeatureGenerator(verbosity=0)
 
         self.num_bins = num_bins

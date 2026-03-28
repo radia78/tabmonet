@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim.lr_scheduler as lr_scheduler
+from functools import partial
 
 from torch.utils.data import DataLoader
 
@@ -15,7 +16,7 @@ from models.tabmonet import build_model
 LOSS_REGISTRY = {
     "regression": nn.MSELoss,
     "binary": nn.BCEWithLogitsLoss,
-    "multiclass": nn.CrossEntropyLoss,
+    "multiclass": partial(nn.CrossEntropyLoss, label_smoothing=0.1),
 }
 
 LR_SCHEDULE_REGISTRY = {
@@ -38,11 +39,16 @@ def main(run_name, config):
     wd_config = config["wd_schedule"]
 
     # Load the dataset
+    if num_emb_config["name"].startswith("Q"):
+        num_bins = num_emb_config["num_bins"]
+    else:
+        num_bins = None
+
     train_dataset, val_dataset, test_dataset, preprocessor, bin_edges = prepare_dataset(
         rm_NA=True,
         dataset_id=config["dataset_id"],
         problem_type=config["problem_type"],
-        num_bins=num_emb_config["num_bins"],
+        num_bins=num_bins,
         test_size=config["test_size"],
     )
 
@@ -75,14 +81,28 @@ def main(run_name, config):
         muon_params = [
             p
             for name, p in model.named_parameters()
-            if ("weight" in name) and (p.dim() == 2)
+            if ("weight" in name) and (p.dim() == 2) and ("soft_selection" not in name)
         ]
         adam_params = [
-            p for name, p in model.named_parameters() if "weight" not in name
+            p for name, p in model.named_parameters() 
+            if ("weight" not in name) and ("soft_selection" not in name)
         ]
         optimizer = [
             torch.optim.Muon(muon_params, **optim_config["muon_config"]),
-            torch.optim.AdamW(adam_params, **optim_config["adam_config"]),
+            torch.optim.AdamW([
+                {
+                    "params": adam_params, 
+                    "lr": optim_config["adam_config"].get("lr"),
+                    "betas": optim_config["adam_config"].get("betas"),
+                    "weight_decay": optim_config["adam_config"].get("weight_decay"),
+                },
+                {
+                    "params": [model.soft_selection], 
+                    "lr": optim_config["adam_config"].get("lr") * 10,
+                    "betas": optim_config["adam_config"].get("betas"),
+                    "weight_decay": optim_config["adam_config"].get("weight_decay"),
+                }]
+            ),
         ]
 
     elif optim_name == "adamw":
@@ -100,7 +120,7 @@ def main(run_name, config):
             ]
 
         else:
-            lr_scheduler = [LR_SCHEDULE_REGISTRY.get(lr_name)(optimizer, **lr_config)]
+            lr_scheduler = [LR_SCHEDULE_REGISTRY.get(lr_name)(op, **lr_config) for op in optimizer]
 
     # Setup the weight-decay scheduler
     wd_name = wd_config.pop("name")
@@ -120,11 +140,17 @@ def main(run_name, config):
         if isinstance(v, dict):
             for u, w in v.items():
                 if isinstance(w, list):
-                    run_config[f"{k}/{u}{i}"] = str(j)
+                    try:
+                        run_config[f"{k}/{u}{i}"] = str(j)
+                    except:
+                        pass
                 elif isinstance(w, dict):
                     for i, j in w.items():
                         if isinstance(j, list):
-                            run_config[f"{k}/{u}/{i}"] = str(j)
+                            try:
+                                run_config[f"{k}/{u}/{i}"] = str(j)
+                            except:
+                                pass
                         else:
                             run_config[f"{k}/{u}/{i}"] = str(j)
                 else:
