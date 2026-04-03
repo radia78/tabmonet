@@ -80,12 +80,13 @@ class DataPreprocessor:
     def __init__(
         self,
         problem_type: str,
+        numerical_preprocessor: TransformerMixin,
         num_bins: Optional[int],
         cont_columns: Optional[list[str]] = None,
         cat_columns: Optional[list[str]] = None,
     ):
         # Per SOTA, we turn the numerical features via Quantile transformation
-        self.cont_encoder = RobustScaleSmoothClipTransform()
+        self.cont_encoder = numerical_preprocessor
         self.cat_encoder = LabelEncoderFeatureGenerator(verbosity=0)
 
         self.num_bins = num_bins

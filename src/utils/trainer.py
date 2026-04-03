@@ -197,6 +197,10 @@ class Trainer:
                 "Score", {"Train": train_metric, "Val": val_metric}, epoch
             )
 
+            """ # Record the 'alpha' of each mlp to find the signal strength
+            alphas = {f"{name}": p.detach().item() for name, p in self.model.named_parameters() if "alpha" in name}
+            self.writer.add_scalars("Alphas", alphas, epoch) """
+
             if epoch == 0:
                 self.best_model_weights = self.model.state_dict()
                 self.best_val_score = val_metric

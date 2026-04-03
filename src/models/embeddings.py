@@ -4,16 +4,16 @@ import torch.nn as nn
 
 
 class CategoricalEmbedding(nn.Module):
-    def __init__(self, num_features: int, max_class: int, embedding_size: int):
+    def __init__(self, num_features: int, max_class: int, emb_dim: int):
         super().__init__()
 
         self.embedding = nn.Parameter(
-            torch.empty(num_features, max_class, embedding_size)
+            torch.empty(num_features, max_class, emb_dim)
         )
 
         nn.init.xavier_uniform_(self.embedding.view(num_features, -1))
         self.embedding.data = self.embedding.data.view(
-            num_features, max_class, embedding_size
+            num_features, max_class, emb_dim
         )
 
         self.register_buffer(
@@ -52,8 +52,6 @@ class QuantileEmbedding(nn.Module):
         self.register_buffer("bin_edges", bin_edges)
         self.num_bins = num_bins
 
-        self.linear = nn.Linear(num_bins, 4)
-
     def forward(self, x):
         batch_size, features = x.shape
 
@@ -66,9 +64,6 @@ class QuantileEmbedding(nn.Module):
         frac = (x.unsqueeze(-1) - edges_lower).div(edges_upper - edges_lower + self.eps)
         mask = (x.unsqueeze(-1) >= edges_lower) & (x.unsqueeze(-1) <= edges_upper)
         encoded = torch.where(mask, frac, encoded)
-
-        # Shape: (batch_size, num_features, num_bins)
-        encoded = self.linear(encoded)
 
         return encoded
 

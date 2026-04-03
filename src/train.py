@@ -102,7 +102,7 @@ def main(run_name, config):
                     "betas": optim_config["adam_config"].get("betas"),
                     "weight_decay": optim_config["adam_config"].get("weight_decay"),
                 }]
-            ),
+            )
         ]
 
     elif optim_name == "adamw":
