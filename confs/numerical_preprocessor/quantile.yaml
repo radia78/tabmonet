@@ -1,0 +1,2 @@
+_target_: sklearn.preprocessing.QuantileTransformer
+output_distribution: uniform

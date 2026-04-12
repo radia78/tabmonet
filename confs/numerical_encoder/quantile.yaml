@@ -1,0 +1,4 @@
+_target_: tabmonet.layers.embedding.QuantileEmbedding
+n_features: ${dataset.n_features} 
+emb_dim: ${feature_dim} 
+eps: 1e-8

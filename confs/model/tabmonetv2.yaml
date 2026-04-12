@@ -1,0 +1,10 @@
+_target_: tabmonet.models.base.TabMONetV2
+problem_type: ${dataset.problem_type}
+n_blocks: 3
+expansion_factor: 1
+n_features: ${dataset.n_features}
+feature_dim: ${feature_dim}
+emb_dim: 256
+n_class: ${dataset.n_class}
+numerical_encoder: ${numerical_encoder}
+categorical_encoder: null

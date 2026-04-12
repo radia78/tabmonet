@@ -1,0 +1,50 @@
+defaults:
+  - dataset: academic
+  - numerical_encoder: quantile
+  - numerical_preprocessor: robust
+  - model: tabmonetv1.yaml
+  - _self_
+
+experiment_name: architecture_ablation
+batch_size: 256
+epochs: 256
+log: false
+device: mps
+compile: false
+
+hydra:
+  run:
+    dir: ./logs/${experiment_name}/${now:%Y-%m-%d-%H-%M}
+
+# Shared dimensions
+feature_dim: 4
+
+preprocessor:
+  _target_: tabmonet.data.preprocess.DataPreprocessor
+  problem_type: ${dataset.problem_type}
+  numerical_preprocessor: ${numerical_preprocessor}
+  num_bins: ${feature_dim}
+  cat_columns: ${dataset.categorical_columns}
+  cont_columns: ${dataset.numerical_columns}
+
+optimizer:
+  muon:
+    _target_: torch.optim.Muon
+    lr: 1e-3
+    weight_decay: 0.1
+
+  adamw:
+    _target_: torch.optim.AdamW
+    lr: 1e-3
+    weight_decay: 0.01
+    betas: [0.9, 0.95]
+    fused: true
+
+wd_scheduler:
+  _target_: tabmonet.schedulers.wd_scheduler.FlatCosineLR
+  T_max: ${epochs}
+
+lr_scheduler:
+  _target_: tabmonet.schedulers.lr_scheduler.CosineLogLR
+  k: 4
+  T_max: ${epochs}

@@ -1,0 +1,4 @@
+_target_: tabmonet.layers.embedding.PBLDEmbedding
+n_features: ${dataset.n_features} 
+emb_dim: 3 
+hidden_dim: 16

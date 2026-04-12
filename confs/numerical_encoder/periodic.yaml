@@ -1,0 +1,5 @@
+_target_: tabmonet.layers.embedding.PeriodicEmbedding
+n_features: ${dataset.n_features}
+emb_dim: ${feature_dim}
+sigma: 1
+bias: true

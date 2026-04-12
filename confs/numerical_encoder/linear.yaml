@@ -1,0 +1,4 @@
+_target_: tabmonet.layers.embedding.LinearEmbedding
+n_features: ${dataset.n_features} 
+emb_dim: ${feature_dim}
+bias: true

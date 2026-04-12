@@ -1,0 +1,68 @@
+dataset:
+  dataset_path: /Users/radiakbar/Documents/Projects/tabmonet/datasets/MaternalHealthRisk.csv
+  problem_type: multiclass
+  n_features: 6
+  rm_NA: true
+  target_column: RiskLevel
+  numerical_columns:
+  - Age
+  - SystolicBP
+  - DiastolicBP
+  - BS
+  - BodyTemp
+  - HeartRate
+  categorical_columns: []
+  test_size: 0.2
+  n_class: 3
+numerical_encoder:
+  _target_: tabmonet.layers.embedding.QuantileEmbedding
+  n_features: ${dataset.n_features}
+  emb_dim: ${feature_dim}
+  eps: 1.0e-08
+numerical_preprocessor:
+  _target_: tabmonet.data.preprocess.RobustScaleSmoothClipTransform
+model:
+  _target_: tabmonet.models.base.TabMONetV2
+  problem_type: ${dataset.problem_type}
+  n_blocks: 3
+  expansion_factor: 1
+  n_features: ${dataset.n_features}
+  feature_dim: ${feature_dim}
+  emb_dim: 256
+  n_class: ${dataset.n_class}
+  numerical_encoder: ${numerical_encoder}
+  categorical_encoder: null
+experiment_name: architecture_ablation
+batch_size: 256
+epochs: 256
+log: false
+device: mps
+compile: false
+feature_dim: 4
+preprocessor:
+  _target_: tabmonet.data.preprocess.DataPreprocessor
+  problem_type: ${dataset.problem_type}
+  numerical_preprocessor: ${numerical_preprocessor}
+  num_bins: ${feature_dim}
+  cat_columns: ${dataset.categorical_columns}
+  cont_columns: ${dataset.numerical_columns}
+optimizer:
+  muon:
+    _target_: torch.optim.Muon
+    lr: 0.001
+    weight_decay: 0.1
+  adamw:
+    _target_: torch.optim.AdamW
+    lr: 0.001
+    weight_decay: 0.01
+    betas:
+    - 0.9
+    - 0.95
+    fused: true
+wd_scheduler:
+  _target_: tabmonet.schedulers.wd_scheduler.FlatCosineLR
+  T_max: ${epochs}
+lr_scheduler:
+  _target_: tabmonet.schedulers.lr_scheduler.CosineLogLR
+  k: 4
+  T_max: ${epochs}
