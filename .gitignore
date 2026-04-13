@@ -5,6 +5,8 @@ build/
 dist/
 wheels/
 *.egg-info
+AutogluonModels/
+experiments/
 
 # Virtual environments
 .venv

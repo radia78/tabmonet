@@ -61,13 +61,10 @@ def configure_optimizer(cfg, model: nn.Module):
             muon_params = [
                 p
                 for name, p in model.named_parameters()
-                if ("weight" in name)
-                and (p.dim() == 2)
+                if ("weight" in name) and (p.dim() == 2)
             ]
             adam_params = [
-                p
-                for name, p in model.named_parameters()
-                if ("weight" not in name)
+                p for name, p in model.named_parameters() if ("weight" not in name)
             ]
             params = [muon_params, adam_params]
             optimizer = [

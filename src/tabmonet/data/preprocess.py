@@ -37,9 +37,10 @@ class DataPreprocessor:
         self.num_cat_features = 0
         self.num_cont_features = 0
 
-    def preprocess(self, X, y, is_train=False):
+    def preprocess(self, X, y=None, is_train=False):
         cat_features = None
         cont_features = None
+        y_processed = None
         bin_edges = None
 
         if is_train:
@@ -81,14 +82,15 @@ class DataPreprocessor:
                         .astype("float32")
                         .T
                     )
-            if self.problem_type == "binary":
-                y_processed = self.target_encoder.fit_transform(
-                    y.to_numpy().reshape(-1, 1)
-                )[:, np.newaxis]
-            else:
-                y_processed = self.target_encoder.fit_transform(
-                    y.to_numpy().reshape(-1, 1)
-                )
+            if y is not None:
+                if self.problem_type == "binary":
+                    y_processed = self.target_encoder.fit_transform(
+                        y.to_numpy().reshape(-1, 1)
+                    )[:, np.newaxis]
+                else:
+                    y_processed = self.target_encoder.fit_transform(
+                        y.to_numpy().reshape(-1, 1)
+                    )
 
         else:
             if self.cat_columns:
@@ -100,13 +102,15 @@ class DataPreprocessor:
                 cont_features = self.cont_encoder.transform(
                     X[self.cont_columns].astype("float32")
                 )
-
-            if self.problem_type == "binary":
-                y_processed = self.target_encoder.transform(
-                    y.to_numpy().reshape(-1, 1)
-                )[:, np.newaxis]
-            else:
-                y_processed = self.target_encoder.transform(y.to_numpy().reshape(-1, 1))
+            if y is not None:
+                if self.problem_type == "binary":
+                    y_processed = self.target_encoder.transform(
+                        y.to_numpy().reshape(-1, 1)
+                    )[:, np.newaxis]
+                else:
+                    y_processed = self.target_encoder.transform(
+                        y.to_numpy().reshape(-1, 1)
+                    )
 
         return cat_features, cont_features, y_processed, bin_edges
 
