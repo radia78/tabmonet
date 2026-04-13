@@ -2,6 +2,7 @@ import pandas as pd
 from autogluon.tabular import TabularDataset, TabularPredictor
 from tabmonet.models.autogluon import TabMONetModel
 from sklearn.model_selection import train_test_split
+import torch
 
 
 def test_tabmonet():
@@ -23,7 +24,7 @@ def test_tabmonet():
             "emb_dim": 256,
             "n_blocks": 1,
             "model_type": "v1",
-            "device": "mps",
+            "device": "cuda:0" if torch.cuda.is_available() else "cpu"
         }
     }
 
