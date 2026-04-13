@@ -57,7 +57,7 @@ class FlatCosineLR(WDScheduler):
         """
 
         # Calculate target rate based on provided function
-        factor = self.scheduler_func(self.t, self.T_max)
+        factor = self.flat_cos_scheduler(self.t, self.T_max)
 
         # Change the weights for these classes
         for group in self.optimizer.param_groups:
