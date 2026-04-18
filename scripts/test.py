@@ -24,7 +24,7 @@ def test_tabmonet():
             "emb_dim": 256,
             "n_blocks": 1,
             "model_type": "v1",
-            "device": "cuda:0" if torch.cuda.is_available() else "cpu"
+            "device": "cuda:0" if torch.cuda.is_available() else "cpu",
         }
     }
 

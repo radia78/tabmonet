@@ -7,7 +7,11 @@ from torch.utils.data import DataLoader
 from typing import List, Optional
 
 from autogluon.tabular.models.abstract.abstract_torch_model import AbstractTorchModel
+from autogluon.common.space import Int
 from autogluon.common.utils.pandas_utils import get_approximate_df_mem_usage
+
+from tabarena.utils.config_utils import ConfigGenerator
+
 from tabmonet.models.base import TabMONetV1, TabMONetV2, RealTabMONet
 from tabmonet.data.preprocess import DataPreprocessor, RobustScaleSmoothClipTransform
 from tabmonet.data.dataset import TabularDataset
@@ -34,6 +38,11 @@ class TabMONetModel(AbstractTorchModel):
     Supports TabMONetV1, TabMONetV2, and RealTabMONet.
     """
 
+    ag_key = "TABMONET"
+    ag_name = "TABMONET"
+    ag_priority = 75
+    seed_name = "random_state"
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.preprocessor = None
@@ -51,7 +60,7 @@ class TabMONetModel(AbstractTorchModel):
             "emb_dim": 256,
             "feature_dim": 32,
             "numerical_encoder_type": "quantile",  # 'linear', 'periodic', 'pbld', 'quantile'
-            "device": "cuda" if torch.cuda.is_available() else "cpu",
+            "device": "cpu",
         }
         for param, val in default_params.items():
             self._set_default_param_value(param, val)
@@ -126,9 +135,7 @@ class TabMONetModel(AbstractTorchModel):
         cont_columns = self._feature_metadata.get_features(
             valid_raw_types=["int", "float"], invalid_special_types=["category"]
         )
-        cat_columns = self._feature_metadata.get_features(
-            required_special_types=["category"]
-        )
+        cat_columns = self._feature_metadata.get_features(valid_raw_types=["category"])
 
         # Initialize DataPreprocessor
         num_bins = (
@@ -176,9 +183,8 @@ class TabMONetModel(AbstractTorchModel):
         cat_encoder = None
         if cat_columns:
             cat_encoder = CategoricalEmbedding(
-                len(cat_columns),
-                params["feature_dim"],
-                self.preprocessor.max_categories,
+                cardinalities=self.preprocessor.max_categories,
+                emb_dim=params["feature_dim"],
             )
 
         model_type = params["model_type"]
@@ -360,7 +366,11 @@ class TabMONetModel(AbstractTorchModel):
         if self.problem_type == "regression":
             outputs_np = self.preprocessor.inverse_transform_target(outputs_np)
 
-        return outputs_np.flatten()
+        if self.problem_type in ("regression", "binary"):
+            return outputs_np.flatten()
+
+        else:
+            return outputs_np
 
     def _estimate_memory_usage(self, X: pd.DataFrame, **kwargs) -> int:
         hyperparameters = self._get_model_params()
@@ -428,3 +438,35 @@ class TabMONetModel(AbstractTorchModel):
 
     def _set_device(self, device: str):
         self.model.to(device)
+
+
+def get_configs_tabmonetv1(*, num_random_configs: int = 1):
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+    manual_configs = [
+        {
+            "model_type": "v1",  # Options: 'v1', 'v2', 'real'
+            "numerical_encoder_type": "quantile",  # 'linear', 'periodic', 'pbld', 'quantile'
+            "device": device,
+        },
+    ]
+    search_space = {
+        "n_estimator": Int(1, 4),
+        "n_blocks": Int(1, 3),
+        "expansion_factor": Int(1, 3),
+        "emb_dim": Int(64, 256),
+        "feature_dim": Int(16, 64),
+    }
+
+    gen_custom_tabmonetv1 = ConfigGenerator(
+        model_cls=TabMONetModel,
+        manual_configs=manual_configs,
+        search_space=search_space,
+    )
+    return gen_custom_tabmonetv1.generate_all_bag_experiments(
+        num_random_configs=num_random_configs, fold_fitting_strategy="sequential_local"
+    )
