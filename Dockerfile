@@ -1,5 +1,7 @@
 # Use a lightweight Python base image
-FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim
+FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -7,12 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /src
 
-COPY pyproject.toml uv.lock ./
+COPY .python-version pyproject.toml uv.lock ./
 
-RUN uv sync --frozen --no-install-project --no-dev
+RUN uv sync --no-install-project --no-dev
 
 COPY . .
 
 RUN uv sync --frozen --no-dev
-
-CMD ["uv", "run", "python", "scripts/run_tabarena_lite.py"]

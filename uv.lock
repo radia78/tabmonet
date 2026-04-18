@@ -1196,28 +1196,6 @@ wheels = [
 ]
 
 [[package]]
-name = "desilofhe"
-version = "1.11.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/03/d8d65a79449cf4450618de04b70f0157a0c5c045924911c024f385bb0dbe/desilofhe-1.11.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:6e10c2d962400fd0e995002f189adbeb5a315a0edc67ce3da482d85c53663651", size = 726691, upload-time = "2026-03-31T03:41:29.692Z" },
-    { url = "https://files.pythonhosted.org/packages/b8/89/03c89f989d6c1b34c51f41512672193456c4cbe4324715f94e30e404841a/desilofhe-1.11.2-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:62ccdff90d716ed417eee3bdfe8490fdb0ee721d9c12e7d231b7cd874b446621", size = 821215, upload-time = "2026-03-31T03:41:31.302Z" },
-    { url = "https://files.pythonhosted.org/packages/27/5a/6a642e89c20fdb54e0b13c8eea9f3cacb351a76f94cb97e660f803add58d/desilofhe-1.11.2-cp312-cp312-manylinux_2_34_x86_64.whl", hash = "sha256:cd31e998719be392c7198cdcbc90386cc220ad5a941a3e87035dfd384d4f09ed", size = 974188, upload-time = "2026-03-31T03:41:33.282Z" },
-    { url = "https://files.pythonhosted.org/packages/f8/9a/e91ff1aef65383b1e61535479a522f8c25c24f17adcf801586af93e5c5e8/desilofhe-1.11.2-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:e1203afdfbeae3b7319e8d40bf076f2236124e7efaf5c6ed7d4232d915bb956a", size = 2050100, upload-time = "2026-03-31T03:41:35.143Z" },
-    { url = "https://files.pythonhosted.org/packages/0f/5f/c09d3675d8dbbaa25db3d267deca9f81e8ac248e57f7689bd798babb3937/desilofhe-1.11.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:cb6a42117d28327ceb26e826d47a8fde4c313f5e5cc3b0e8eb1300f0895677bc", size = 727658, upload-time = "2026-03-31T03:41:36.796Z" },
-    { url = "https://files.pythonhosted.org/packages/05/fe/042d92a9e02e5dbf3caedfd4a04d1dbe89039d16e5beb788926b4be44d7c/desilofhe-1.11.2-cp313-cp313-macosx_11_0_x86_64.whl", hash = "sha256:bb6bec312e20d6ea25e3cc2948f4dc166e0954f9f2718687bf0945d34b9602c9", size = 821954, upload-time = "2026-03-31T03:41:38.686Z" },
-    { url = "https://files.pythonhosted.org/packages/37/e9/e5cabfc0b27e1cc7e951030d01be32309963a25f421ba5a9aeb3686e4513/desilofhe-1.11.2-cp313-cp313-manylinux_2_34_x86_64.whl", hash = "sha256:b9dd09c64a8698a6f66a45a0742d284beb1364f7156f8f81c8d611def031af0a", size = 974169, upload-time = "2026-03-31T03:41:40.221Z" },
-    { url = "https://files.pythonhosted.org/packages/ec/f7/166cc034ae5c0947c9790ddb3562d37626bc62d3c5fbabc0c6834e57d2b9/desilofhe-1.11.2-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:7f86a619ff053192a16f3db7d31971fbb967bc06e71a76a9c47998bb2e68690d", size = 2050422, upload-time = "2026-03-31T03:41:42.068Z" },
-    { url = "https://files.pythonhosted.org/packages/56/ca/2555f6e1883b89bc4b5faadfc33b8742aa4869a2295142c03c73668f24f3/desilofhe-1.11.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:2555edc607709e5f19c01eb8c6f875a1659f023a00ff2aa470f1a6af1b5c9890", size = 727640, upload-time = "2026-03-31T03:41:43.464Z" },
-    { url = "https://files.pythonhosted.org/packages/32/07/68850c545d6f6f88fa1c89bb18f123bedf60311f41944dcf0b249ef40e35/desilofhe-1.11.2-cp314-cp314-macosx_11_0_x86_64.whl", hash = "sha256:3ca8940051e98ae35c7ce6c7d6b114d5ae6d2dfa927a5a4bda935209424cc9e9", size = 821958, upload-time = "2026-03-31T03:41:45.309Z" },
-    { url = "https://files.pythonhosted.org/packages/50/e6/838390f639578678d24e3ffaea0098f300945712e116fec8b46971cb6c7d/desilofhe-1.11.2-cp314-cp314-manylinux_2_34_x86_64.whl", hash = "sha256:3686b5510a578c339fc78590ad499eb2dacb2e38c5c769d8fa8541df11a4567d", size = 974159, upload-time = "2026-03-31T03:41:47.167Z" },
-    { url = "https://files.pythonhosted.org/packages/a5/e4/ae2e83b47934a4d2424ba07cdc0068f667521f5dc9441ea4c14f9df30690/desilofhe-1.11.2-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:3ffeebc00688209168e50f0632844505f267dfe841b5cfb8d2d9fd209fe665c8", size = 2050880, upload-time = "2026-03-31T03:41:48.911Z" },
-]
-
-[[package]]
 name = "dill"
 version = "0.3.8"
 source = { registry = "https://pypi.org/simple" }
@@ -4864,7 +4842,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "autogluon" },
-    { name = "desilofhe" },
     { name = "hydra-core" },
     { name = "numpy" },
     { name = "scikit-learn" },
@@ -4881,7 +4858,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "autogluon", specifier = ">=1.5.0" },
-    { name = "desilofhe", specifier = ">=1.11.2" },
     { name = "hydra-core", specifier = ">=1.3.2" },
     { name = "numpy", specifier = ">=2.1.3" },
     { name = "scikit-learn", specifier = ">=1.7.2" },
