@@ -66,13 +66,14 @@ class TabMONetBase(nn.Module):
         return pred
 
     def predict_proba(self, x_num, x_cat):
+        out, _ = self(x_num, x_cat)
         match self.problem_type:
             case "binary":
-                prob = F.sigmoid(self(x_num, x_cat))
+                prob = F.sigmoid(out)
             case "multiclass":
-                prob = F.softmax(self(x_num, x_cat), dim=-1)
+                prob = F.softmax(out, dim=-1)
             case "regression":
-                prob, _ = self(x_num, x_cat)
+                prob = out
 
         return prob
 

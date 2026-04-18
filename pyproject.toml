@@ -10,6 +10,7 @@ dependencies = [
     "hydra-core>=1.3.2",
     "numpy>=2.1.3",
     "scikit-learn>=1.7.2",
+    "tabarena",
     "torch>=2.9.1",
     "ucimlrepo>=0.0.7",
 ]
@@ -25,3 +26,6 @@ dev = [
 
 [tool.ruff]
 extend-exclude = ["tests", "src/tabmonet/models/tabmonet.py"]
+
+[tool.uv.sources]
+tabarena = { git = "https://github.com/autogluon/tabarena.git", subdirectory = "tabarena" }
