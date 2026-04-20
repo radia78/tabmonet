@@ -32,7 +32,7 @@ class TabMONetBase(nn.Module):
                 assert n_class is not None, (
                     "multiclass requires n_class to be an `int` > 1"
                 )
-
+                
         self.numerical_encoder = numerical_encoder
         self.categorical_encoder = categorical_encoder
 

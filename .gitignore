@@ -5,9 +5,10 @@ build/
 dist/
 wheels/
 *.egg-info
-AutogluonModels/
-experiments/
 .ruff_cache
+AutoGluonModels/
+experiments/
+logs/
 
 # Virtual environments
 .venv
