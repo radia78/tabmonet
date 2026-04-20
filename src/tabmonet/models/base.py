@@ -15,7 +15,7 @@ from tabmonet.layers.embedding import Embedding
 class TabMONetBase(nn.Module):
     def __init__(
         self,
-        problem_type: bool,
+        problem_type: str,
         n_class: Optional[int] = None,
         numerical_encoder: Optional[Embedding] = None,
         categorical_encoder: Optional[Embedding] = None,

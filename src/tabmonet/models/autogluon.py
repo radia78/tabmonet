@@ -443,7 +443,7 @@ class TabMONetModel(AbstractTorchModel):
 
 def get_configs_tabmonetv1(*, num_random_configs: int = 1):
     if torch.cuda.is_available():
-        device = "cuda"
+        device = "cuda:0"
     elif torch.mps.is_available():
         device = "mps"
     else:
