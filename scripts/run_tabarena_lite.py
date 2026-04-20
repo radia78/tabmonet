@@ -18,7 +18,7 @@ def run_tabarena_lite_for_tabmonetv1():
     task_ids = openml.study.get_suite("tabarena-v0.1").tasks
 
     # Gets 1 default and 1 random config = 2 configs
-    model_experiments = get_configs_tabmonetv1(num_random_configs=10)
+    model_experiments = get_configs_tabmonetv1(num_random_configs=5)
 
     run_experiments_new(
         output_dir=TABARENA_DIR,
