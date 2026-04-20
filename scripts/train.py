@@ -1,4 +1,3 @@
-from datetime import datetime
 import hydra
 from torch.utils.data import DataLoader
 from hydra.utils import instantiate
@@ -39,7 +38,7 @@ def train(cfg):
     # Build the model
     model = instantiate(cfg.model, numerical_encoder=numerical_encoder)
     if cfg.compile:
-        model.compile(mode='reduce-overhead')
+        model.compile(mode="reduce-overhead")
 
     # Configuring the optimizer
     # Obtain all 2D parameters from the model except the bias for the embedding

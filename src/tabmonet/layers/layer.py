@@ -36,7 +36,9 @@ class EnsembleAdapter(nn.Module):
         self.estimators = nn.ModuleList(modules)
 
     def forward(self, x):
-        estimates = torch.stack([estimator(x.flatten(1, -1)) for estimator in self.estimators], dim=1)
+        estimates = torch.stack(
+            [estimator(x.flatten(1, -1)) for estimator in self.estimators], dim=1
+        )
         return estimates
 
 
@@ -46,7 +48,10 @@ class ConvolutionEnsemble(nn.Module):
         self.padding = nn.CircularPad1d((0, 2))
         self.upsize = nn.Linear(feature_dim, int(4 / 3 * out_dim), bias=False)
         self.ensemble = nn.Conv1d(
-            in_channels=int(4 / 3 * out_dim), out_channels=out_dim, bias=False, kernel_size=3
+            in_channels=int(4 / 3 * out_dim),
+            out_channels=out_dim,
+            bias=False,
+            kernel_size=3,
         )
 
     def forward(self, x):
@@ -107,9 +112,9 @@ class PolyMLP(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        nn.init.kaiming_normal_(self.U1.weight, nonlinearity='linear')
-        nn.init.kaiming_normal_(self.U2.weight, nonlinearity='linear')
-        nn.init.kaiming_normal_(self.U3.weight, nonlinearity='linear')
+        nn.init.kaiming_normal_(self.U1.weight, nonlinearity="linear")
+        nn.init.kaiming_normal_(self.U2.weight, nonlinearity="linear")
+        nn.init.kaiming_normal_(self.U3.weight, nonlinearity="linear")
         if self.bias:
             nn.init.ones_(self.U1.bias)
             nn.init.ones_(self.U2.bias)

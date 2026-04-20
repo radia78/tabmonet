@@ -45,10 +45,10 @@ def prepare_dataset(
     rm_NA: bool,
     preprocessor: DataPreprocessor,
     target_column: str,
-    numerical_columns: Optional[List[str]]=None,
-    categorical_columns: Optional[List[str]]=None,
+    numerical_columns: Optional[List[str]] = None,
+    categorical_columns: Optional[List[str]] = None,
     test_size: float = 0.2,
-    **kwargs
+    **kwargs,
 ):
     # Load and split the dataset
     dataset = pd.read_csv(dataset_path)
@@ -75,7 +75,7 @@ def prepare_dataset(
             X, X_test, y, y_test = train_test_split(
                 dataset[numerical_columns + categorical_columns],
                 dataset[[target_column]],
-                test_size=test_size
+                test_size=test_size,
             )
         else:
             X, X_test, y, y_test = train_test_split(

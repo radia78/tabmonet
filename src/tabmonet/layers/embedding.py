@@ -128,23 +128,19 @@ class QuantileEmbedding(Embedding):
         return encoded
 
 
-class CategoricalEmbedding(Embedding):
-    def __init__(self, n_features: int, emb_dim: int, max_class: int):
-        super().__init__(n_features, emb_dim)
-        self.max_class = max_class
-        self.embedding = nn.Parameter(
-            torch.empty(self.n_features, self.max_class, self.emb_dim)
-        )
-        self.register_buffer(
-            "feature_idx", torch.arange(self.n_features, dtype=torch.long)
-        )
-        self._init_weights()
-
-    def _init_weights(self):
-        nn.init.xavier_uniform_(self.embedding.view(self.n_features, -1))
-        self.embedding.data = self.embedding.data.view(
-            self.n_features, self.max_class, self.emb_dim
-        )
+class CategoricalEmbedding(nn.Module):
+    def __init__(self, cardinalities: list[int], emb_dim: int):
+        super().__init__()
+        self.cardinalities = cardinalities
+        embeddings = []
+        for k in cardinalities:
+            embeddings.append(nn.Embedding(k + 1, emb_dim, padding_idx=0))
+        self.embeddings = nn.ModuleList(embeddings)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.embedding[self.feature_idx, x]
+        x = (x > 0) * x
+        temp = []
+        for i in range(len(self.cardinalities)):
+            temp.append(self.embeddings[i](x[:, i]))
+        encoding = torch.stack(temp, dim=1)
+        return encoding

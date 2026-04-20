@@ -15,12 +15,13 @@ from tabmonet.layers.embedding import Embedding
 class TabMONetBase(nn.Module):
     def __init__(
         self,
-        problem_type: bool,
-        n_class: Optional[int]=None,
+        problem_type: str,
+        n_class: Optional[int] = None,
         numerical_encoder: Optional[Embedding] = None,
         categorical_encoder: Optional[Embedding] = None,
     ):
         super().__init__()
+        self.problem_type = problem_type
         match problem_type:
             case "regression":
                 self.criterion = nn.MSELoss()
@@ -31,7 +32,7 @@ class TabMONetBase(nn.Module):
                 assert n_class is not None, (
                     "multiclass requires n_class to be an `int` > 1"
                 )
-        self.problem_type = problem_type
+                
         self.numerical_encoder = numerical_encoder
         self.categorical_encoder = categorical_encoder
 
@@ -60,16 +61,19 @@ class TabMONetBase(nn.Module):
             case "multiclass":
                 pred = self.predict_proba(x_num, x_cat).argmax(dim=-1)
             case "regression":
-                pred = self(x_num, x_cat)
+                pred = self.predict_proba(x_num, x_cat)
 
         return pred
 
     def predict_proba(self, x_num, x_cat):
+        out, _ = self(x_num, x_cat)
         match self.problem_type:
             case "binary":
-                prob = F.sigmoid(self(x_num, x_cat))
+                prob = F.sigmoid(out)
             case "multiclass":
-                prob = F.softmax(self(x_num, x_cat), dim=-1)
+                prob = F.softmax(out, dim=-1)
+            case "regression":
+                prob = out
 
         return prob
 
@@ -89,10 +93,10 @@ class TabMONetV1(TabMONetBase):
         categorical_encoder: Optional[Embedding] = None,
     ):
         super().__init__(
-            problem_type=problem_type, 
-            numerical_encoder=numerical_encoder, 
+            problem_type=problem_type,
+            numerical_encoder=numerical_encoder,
             categorical_encoder=categorical_encoder,
-            n_class=n_class
+            n_class=n_class,
         )
         self.neck = EnsembleAdapter(
             n_estimator=n_estimator,
@@ -133,8 +137,8 @@ class TabMONetV2(TabMONetBase):
         categorical_encoder: Optional[Embedding] = None,
     ):
         super().__init__(
-            problem_type=problem_type, 
-            numerical_encoder=numerical_encoder, 
+            problem_type=problem_type,
+            numerical_encoder=numerical_encoder,
             categorical_encoder=categorical_encoder,
             n_class=n_class,
         )
@@ -173,10 +177,10 @@ class RealTabMONet(TabMONetBase):
         categorical_encoder: Optional[Embedding] = None,
     ):
         super().__init__(
-            problem_type=problem_type, 
-            numerical_encoder=numerical_encoder, 
+            problem_type=problem_type,
+            numerical_encoder=numerical_encoder,
             categorical_encoder=categorical_encoder,
-            n_class=n_class
+            n_class=n_class,
         )
         self.soft_selection = nn.Parameter(torch.ones(n_features, 1))
         self.neck = nn.Linear(feature_dim, emb_dim, bias=False)

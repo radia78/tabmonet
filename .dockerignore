@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+.ruff_cache
+__pycache__
+*.pyc
+logs
+experiments
+AutogluonModels
+confs
+std.out
+*.pkl
+*.pt
+GEMINI.md

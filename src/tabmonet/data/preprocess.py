@@ -29,36 +29,34 @@ class DataPreprocessor:
         else:
             self.target_encoder = LabelEncoder()
 
-        self.cat_columns = cat_columns if cat_columns is not None else []
-        self.cont_columns = cont_columns if cont_columns is not None else []
+        self.cat_columns = cat_columns if cat_columns is not None else None
+        self.cont_columns = cont_columns if cont_columns is not None else None
 
         self.max_categories = 0
 
         self.num_cat_features = 0
         self.num_cont_features = 0
 
-    def preprocess(self, X, y, is_train=False):
+    def preprocess(self, X, y=None, is_train=False):
         cat_features = None
         cont_features = None
+        y_processed = None
         bin_edges = None
 
         if is_train:
-            if not self.cont_columns:
+            if self.cont_columns is None:
                 self.cont_columns = X.select_dtypes(include="number").columns.tolist()
-            if not self.cat_columns:
+            if self.cat_columns is None:
                 self.cat_columns = X.select_dtypes(exclude="number").columns.tolist()
             self.num_cat_features = len(self.cat_columns)
             self.num_cont_features = len(self.cont_columns)
 
             # Fit them separately and retain the max-class inforamtion automatically
             if self.cat_columns:
-                self.max_categories = (
-                    X[self.cat_columns]
-                    .astype("category")
-                    .describe(include="all")
-                    .loc["unique"]
-                    .max()
-                )
+                self.max_categories = []
+                for c in self.cat_columns:
+                    self.max_categories.append(X[c].cat.codes.max())
+
                 cat_features = self.cat_encoder.fit_transform(
                     X[self.cat_columns].astype("category")
                 ).to_numpy()
@@ -81,14 +79,15 @@ class DataPreprocessor:
                         .astype("float32")
                         .T
                     )
-            if self.problem_type == "binary":
-                y_processed = self.target_encoder.fit_transform(
-                    y.to_numpy().reshape(-1, 1)
-                )[:, np.newaxis]
-            else:
-                y_processed = self.target_encoder.fit_transform(
-                    y.to_numpy().reshape(-1, 1)
-                )
+            if y is not None:
+                if self.problem_type == "binary":
+                    y_processed = self.target_encoder.fit_transform(
+                        y.to_numpy().reshape(-1, 1)
+                    )[:, np.newaxis]
+                else:
+                    y_processed = self.target_encoder.fit_transform(
+                        y.to_numpy().reshape(-1, 1)
+                    )
 
         else:
             if self.cat_columns:
@@ -100,13 +99,15 @@ class DataPreprocessor:
                 cont_features = self.cont_encoder.transform(
                     X[self.cont_columns].astype("float32")
                 )
-
-            if self.problem_type == "binary":
-                y_processed = self.target_encoder.transform(
-                    y.to_numpy().reshape(-1, 1)
-                )[:, np.newaxis]
-            else:
-                y_processed = self.target_encoder.transform(y.to_numpy().reshape(-1, 1))
+            if y is not None:
+                if self.problem_type == "binary":
+                    y_processed = self.target_encoder.transform(
+                        y.to_numpy().reshape(-1, 1)
+                    )[:, np.newaxis]
+                else:
+                    y_processed = self.target_encoder.transform(
+                        y.to_numpy().reshape(-1, 1)
+                    )
 
         return cat_features, cont_features, y_processed, bin_edges
 
