@@ -361,7 +361,7 @@ class TabMONetModel(AbstractTorchModel):
         with torch.no_grad():
             outputs = self.model.predict_proba(cont_tensor, cat_tensor)
 
-        outputs_np = outputs.cpu().numpy()
+        outputs_np = outputs.detach().cpu().numpy()
 
         # Inverse transform target for regression
         if self.problem_type == "regression":
