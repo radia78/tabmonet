@@ -1,0 +1,20 @@
+# HTC Submit File
+
+# Provide HTCondor with the name of the Docker container
+container_image = docker://radia78/tabmonet-lite:latest
+universe = container
+
+executable = bench_tabmonetv1.sh
+
+log = job.log
+error = job.err
+output = job.out
+
+transfer_input_files = ./
+
+request_cpus = 8
+request_gpus = 1
+request_memory = 32GB
+request_disk = 100GB
+
+queue
