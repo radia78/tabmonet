@@ -224,7 +224,6 @@ class TabMONetModel(AbstractTorchModel):
             raise ValueError(f"Unknown model_type: {model_type}")
 
         self.model.to(self.device)
-        self.model.compile(mode="reduce-overhead")
 
         # Training Setup
         training_kwargs = OmegaConf.create(
