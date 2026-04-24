@@ -3,8 +3,10 @@ import numpy as np
 import pandas as pd
 import torch
 import time
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from typing import List, Optional
+from functools import partial
 
 from autogluon.tabular.models.abstract.abstract_torch_model import AbstractTorchModel
 from autogluon.common.space import Int
@@ -25,6 +27,7 @@ from tabmonet.layers.embedding import (
     QuantileEmbedding,
     CategoricalEmbedding,
 )
+from tabmonet.layers.layer import NewtonRaphsonLayerNorm
 
 from omegaconf import OmegaConf
 from sklearn.impute import SimpleImputer
@@ -60,10 +63,17 @@ class TabMONetModel(AbstractTorchModel):
             "emb_dim": 256,
             "feature_dim": 32,
             "numerical_encoder_type": "quantile",  # 'linear', 'periodic', 'pbld', 'quantile'
+            "layer_norm_type": "full",
             "device": "cpu",
         }
         for param, val in default_params.items():
             self._set_default_param_value(param, val)
+
+    def _get_layer_norm(self, layer_norm_type: str):
+        if layer_norm_type == "full":
+            return partial(nn.LayerNorm, eps=1e-6)
+        elif layer_norm_type == "newton_raphson":
+            return NewtonRaphsonLayerNorm
 
     def _get_numerical_encoder(
         self,
@@ -187,6 +197,8 @@ class TabMONetModel(AbstractTorchModel):
                 emb_dim=params["feature_dim"],
             )
 
+        layer_norm = self._get_layer_norm(params["layer_norm_type"])
+
         model_type = params["model_type"]
         model_kwargs = {
             "n_features": n_features,
@@ -198,6 +210,7 @@ class TabMONetModel(AbstractTorchModel):
             "n_class": n_class,
             "numerical_encoder": num_encoder,
             "categorical_encoder": cat_encoder,
+            "layer_norm": layer_norm,
         }
 
         if model_type == "v1":
@@ -452,6 +465,7 @@ def get_configs_tabmonetv1(*, num_random_configs: int = 1):
         {
             "model_type": "v1",  # Options: 'v1', 'v2', 'real'
             "numerical_encoder_type": "quantile",  # 'linear', 'periodic', 'pbld', 'quantile'
+            "layer_norm_type": "full",
             "device": device,
         },
     ]
@@ -461,6 +475,39 @@ def get_configs_tabmonetv1(*, num_random_configs: int = 1):
         "expansion_factor": Int(1, 3),
         "emb_dim": Int(64, 256),
         "feature_dim": Int(16, 64),
+    }
+
+    gen_custom_tabmonetv1 = ConfigGenerator(
+        model_cls=TabMONetModel,
+        manual_configs=manual_configs,
+        search_space=search_space,
+    )
+    return gen_custom_tabmonetv1.generate_all_bag_experiments(
+        num_random_configs=num_random_configs, fold_fitting_strategy="sequential_local"
+    )
+
+
+def get_configs_tabmonetv1_fhe(*, num_random_configs: int = 1):
+    if torch.cuda.is_available():
+        device = "cuda:0"
+    elif torch.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+    manual_configs = [
+        {
+            "model_type": "v1",  # Options: 'v1', 'v2', 'real'
+            "numerical_encoder_type": "quantile",  # 'linear', 'periodic', 'pbld', 'quantile'
+            "layer_norm_type": "newton_raphson",
+            "emb_dim": 256,
+            "feature_dim": 16,
+            "expansion_factor": 1,
+            "n_blocks": 3,
+            "device": device,
+        },
+    ]
+    search_space = {
+        "n_estimator": Int(1, 4),
     }
 
     gen_custom_tabmonetv1 = ConfigGenerator(

@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 from typing import Optional
+from functools import partial
 
 
 class NewtonRaphsonLayerNorm(nn.Module):
-    def __init__(self, normalized_shape, eps=1e-5, iterations=3):
+    def __init__(self, normalized_shape: int, eps: float = 1e-5, iterations: int = 3):
         super().__init__()
         self.eps = eps
         self.iterations = iterations
@@ -86,6 +87,7 @@ class PolyMLP(nn.Module):
         in_features: int,
         hidden_features: Optional[int] = None,
         out_features: Optional[int] = None,
+        layer_norm: nn.Module = partial(nn.LayerNorm, eps=1e-6),
         bias: bool = True,
         use_spatial: bool = False,
     ):
@@ -96,8 +98,8 @@ class PolyMLP(nn.Module):
         self.bias = bias
         self.use_spatial = use_spatial
 
-        self.norm1 = nn.LayerNorm(self.hidden_features, eps=1e-6)
-        self.norm3 = nn.LayerNorm(self.hidden_features, eps=1e-6)
+        self.norm1 = layer_norm(self.hidden_features)
+        self.norm3 = layer_norm(self.hidden_features)
 
         self.U1 = nn.Linear(self.in_features, self.hidden_features, bias=self.bias)
         self.U2 = nn.Linear(self.in_features, self.hidden_features // 8, bias=self.bias)
@@ -152,17 +154,19 @@ class PolyBlock(nn.Module):
         self,
         hidden_dim: int,
         expansion_factor: int = 3,
+        layer_norm: nn.Module = partial(nn.LayerNorm, eps=1e-6),
         spatial_mix: bool = False,
     ):
         super().__init__()
         self.expansion_factor = expansion_factor
         self.hidden_dim = hidden_dim
 
-        self.norm = nn.LayerNorm(hidden_dim, eps=1e-6)
+        self.norm = layer_norm(hidden_dim, eps=1e-6)
         self.alpha1 = nn.Parameter(torch.zeros(1))
         self.alpha2 = nn.Parameter(torch.zeros(1))
         self.alpha3 = nn.Parameter(torch.zeros(1))
         self.mlp1 = PolyMLP(
+            layer_norm=layer_norm,
             in_features=hidden_dim,
             hidden_features=hidden_dim,
             out_features=hidden_dim,
@@ -170,6 +174,7 @@ class PolyBlock(nn.Module):
             bias=False,
         )
         self.mlp2 = PolyMLP(
+            layer_norm=layer_norm,
             in_features=hidden_dim,
             hidden_features=hidden_dim * expansion_factor,
             out_features=hidden_dim,

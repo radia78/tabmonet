@@ -2,6 +2,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from functools import partial
 
 from tabmonet.layers.layer import (
     PolyBlock,
@@ -91,6 +92,7 @@ class TabMONetV1(TabMONetBase):
         n_class: Optional[int] = None,
         numerical_encoder: Optional[Embedding] = None,
         categorical_encoder: Optional[Embedding] = None,
+        layer_norm: nn.Module = partial(nn.LayerNorm, eps=1e-6),
     ):
         super().__init__(
             problem_type=problem_type,
@@ -105,12 +107,20 @@ class TabMONetV1(TabMONetBase):
         )
         blocks = []
         for _ in range(n_blocks):
-            blocks.append(PolyBlock(emb_dim, expansion_factor, spatial_mix=False))
+            blocks.append(
+                PolyBlock(
+                    emb_dim, expansion_factor, spatial_mix=False, layer_norm=layer_norm
+                )
+            )
         self.blocks = nn.Sequential(*blocks)
         if problem_type in ("regression", "binary"):
-            self.head = PolyMLP(n_estimator * emb_dim, emb_dim, 1)
+            self.head = PolyMLP(
+                n_estimator * emb_dim, emb_dim, 1, layer_norm=layer_norm
+            )
         else:
-            self.head = PolyMLP(n_estimator * emb_dim, emb_dim, n_class)
+            self.head = PolyMLP(
+                n_estimator * emb_dim, emb_dim, n_class, layer_norm=layer_norm
+            )
 
     def forward(self, x_num, x_cat, y=None):
         e = self.encode(x_num, x_cat)
@@ -135,6 +145,7 @@ class TabMONetV2(TabMONetBase):
         problem_type: str,
         numerical_encoder: Optional[Embedding] = None,
         categorical_encoder: Optional[Embedding] = None,
+        layer_norm: nn.Module = partial(nn.LayerNorm, eps=1e-6),
     ):
         super().__init__(
             problem_type=problem_type,
@@ -145,12 +156,18 @@ class TabMONetV2(TabMONetBase):
         self.neck = ConvolutionEnsemble(n_features, feature_dim, emb_dim)
         blocks = []
         for _ in range(n_blocks):
-            blocks.append(PolyBlock(emb_dim, expansion_factor, spatial_mix=True))
+            blocks.append(
+                PolyBlock(
+                    emb_dim, expansion_factor, spatial_mix=True, layer_norm=layer_norm
+                )
+            )
         self.blocks = nn.Sequential(*blocks)
         if problem_type in ("regression", "binary"):
-            self.head = PolyMLP(n_features * emb_dim, emb_dim, 1)
+            self.head = PolyMLP(n_features * emb_dim, emb_dim, 1, layer_norm=layer_norm)
         else:
-            self.head = PolyMLP(n_features * emb_dim, emb_dim, n_class)
+            self.head = PolyMLP(
+                n_features * emb_dim, emb_dim, n_class, layer_norm=layer_norm
+            )
 
     def forward(self, x_num, x_cat, y=None):
         e = self.encode(x_num, x_cat)
@@ -175,6 +192,7 @@ class RealTabMONet(TabMONetBase):
         problem_type: int,
         numerical_encoder: Optional[Embedding] = None,
         categorical_encoder: Optional[Embedding] = None,
+        layer_norm: nn.Module = partial(nn.LayerNorm, eps=1e-6),
     ):
         super().__init__(
             problem_type=problem_type,
@@ -186,12 +204,18 @@ class RealTabMONet(TabMONetBase):
         self.neck = nn.Linear(feature_dim, emb_dim, bias=False)
         blocks = []
         for _ in range(n_blocks):
-            blocks.append(PolyBlock(emb_dim, expansion_factor, spatial_mix=True))
+            blocks.append(
+                PolyBlock(
+                    emb_dim, expansion_factor, spatial_mix=True, layer_norm=layer_norm
+                )
+            )
         self.blocks = nn.Sequential(*blocks)
         if problem_type in ("regression", "binary"):
-            self.head = PolyMLP(n_features * emb_dim, emb_dim, 1)
+            self.head = PolyMLP(n_features * emb_dim, emb_dim, 1, layer_norm=layer_norm)
         else:
-            self.head = PolyMLP(n_features * emb_dim, emb_dim, n_class)
+            self.head = PolyMLP(
+                n_features * emb_dim, emb_dim, n_class, layer_norm=layer_norm
+            )
 
     def forward(self, x_num, x_cat, y=None):
         e = self.encode(x_num, x_cat) * self.soft_selection
